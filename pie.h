@@ -4,6 +4,8 @@
 #include <linux/types.h>
 #include <linux/skbuff.h>
 #include <net/pkt_sched.h>
+#include <linux/vmalloc.h>
+#include "compat.h"
 
 #define QUEUE_THRESHOLD 10000
 #define DQCOUNT_INVALID -1

@@ -1,5 +1,5 @@
-KERNELSRCDIR = /usr/src/linux
-BUILD_DIR := $(shell pwd)
+KDIR := /lib/modules/$(KERNEL_VERSION)/build
+PWD := $(shell pwd)
 VERBOSE = 0
 obj-m := fq_pie.o pie.o
 fq_pie-objs := sch_fq_pie.o
@@ -9,7 +9,7 @@ pie-objs := sch_pie.o
 ccflag-y := -O2
 
 all:
-	make -C $(KERNELSRCDIR) SUBDIRS=$(BUILD_DIR) KBUILD_VERBOSE=$(VERBOSE) modules
+	$(MAKE) -C $(KDIR) SUBDIRS=$(PWD) modules
 
 clean:
 	rm -f *.o
@@ -18,5 +18,6 @@ clean:
 	rm -f *.mod.c
 	rm -f *~
 	rm -f modules.order
+	rm -f Module.markers
 	rm -f Module.symvers
 	rm -rf .tmp_versions

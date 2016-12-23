@@ -28,9 +28,9 @@
 #include <linux/errno.h>
 #include <linux/ktime.h>
 #include <linux/skbuff.h>
-#include <net/pkt_sched.h>
+#include "pkt_sched.h"
 #include <net/inet_ecn.h>
-#include <net/pie.h>
+#include "pie.h"
 
 /* private data for the Qdisc */
 struct pie_sched_data {
@@ -50,7 +50,7 @@ static int pie_qdisc_enqueue(struct sk_buff *skb, struct Qdisc *sch)
 		goto out;
 	}
 
-	if (!drop_early(sch, &q->params, &q->vars, skb->len)) { 
+	if (!drop_early(sch, &q->params, &q->vars, skb->len)) {
 		enqueue = true;
 	} else if (q->params.ecn && (q->vars.prob <= MAX_PROB / 10) &&
 		   INET_ECN_set_ce(skb)) {

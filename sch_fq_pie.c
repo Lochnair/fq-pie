@@ -32,11 +32,10 @@
 #include <linux/skbuff.h>
 #include <linux/jhash.h>
 #include <linux/slab.h>
-#include <linux/vmalloc.h>
 #include <net/netlink.h>
-#include <net/pkt_sched.h>
+#include "pkt_sched.h"
 #include <net/inet_ecn.h>
-#include <net/pie.h>
+#include "pie.h"
 
 /*	Fair Queue PIE.
  *
@@ -83,9 +82,14 @@ struct fq_pie_sched_data {
 static unsigned int fq_pie_hash(const struct fq_pie_sched_data *q,
 				  const struct sk_buff *skb)
 {
-	u32 hash = skb_get_hash_perturb(skb, q->perturbation);
+	struct flow_keys keys;
+	unsigned int hash;
 
-	return reciprocal_scale(hash, q->flows_cnt);
+	skb_flow_dissect(skb, &keys);
+	hash = jhash_3words((__force u32)keys.dst,
+						(__force u32)keys.src ^ keys.ip_proto,
+						(__force u32)keys.ports, q->perturbation);
+	return ((u64)hash * q->flows_cnt) >> 32;
 }
 
 static unsigned int fq_pie_classify(struct sk_buff *skb, struct Qdisc *sch,
@@ -264,7 +268,7 @@ static void fq_pie_timer(unsigned long arg)
 {
 	struct Qdisc *sch = (struct Qdisc *)arg;
 	struct fq_pie_sched_data *q = qdisc_priv(sch);
-	
+
 	spinlock_t *root_lock = qdisc_lock(qdisc_root_sleeping(sch));
 
 	spin_lock(root_lock);
@@ -556,7 +560,7 @@ static int fq_pie_dump_class_stats(struct Qdisc *sch, unsigned long cl,
 		qs.backlog = q->backlogs[idx];
 		qs.drops = flow->dropped;
 	}
-	if (gnet_stats_copy_queue(d, NULL, &qs, 0) < 0)
+	if (pie_stats_copy_queue(d, NULL, &qs, 0) < 0)
 		return -1;
 	if (idx < q->flows_cnt)
 		return gnet_stats_copy_app(d, &xstats, sizeof(xstats));
