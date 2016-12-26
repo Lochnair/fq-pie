@@ -1,4 +1,4 @@
-KDIR := /lib/modules/$(KERNEL_VERSION)/build
+KDIR := /lib/modules/$(shell uname -r)/build
 PWD := $(shell pwd)
 VERBOSE = 0
 obj-m := fq_pie.o pie.o
