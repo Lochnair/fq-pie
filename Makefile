@@ -1,7 +1,7 @@
 KDIR := /lib/modules/$(shell uname -r)/build
 PWD := $(shell pwd)
 VERBOSE = 0
-obj-m := fq_pie.o pie.o
+obj-m := sch_fq_pie.o sch_pie.o
 fq_pie-objs := sch_fq_pie.o
 pie-objs := sch_pie.o
 
