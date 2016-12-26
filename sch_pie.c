@@ -40,7 +40,11 @@ struct pie_sched_data {
 	struct timer_list adapt_timer;
 };
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 8, 0)
 static int pie_qdisc_enqueue(struct sk_buff *skb, struct Qdisc *sch)
+#else
+static int pie_qdisc_enqueue(struct sk_buff *skb, struct Qdisc *sch, struct sk_buff **to_free)
+#endif
 {
 	struct pie_sched_data *q = qdisc_priv(sch);
 	bool enqueue = false;
@@ -72,7 +76,11 @@ static int pie_qdisc_enqueue(struct sk_buff *skb, struct Qdisc *sch)
 
 out:
 	q->stats.dropped++;
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 8, 0)
 	return qdisc_drop(skb, sch);
+#else
+	return qdisc_drop(skb, sch, to_free);
+#endif
 }
 
 static const struct nla_policy pie_policy[TCA_PIE_MAX + 1] = {
@@ -89,7 +97,7 @@ static int pie_change(struct Qdisc *sch, struct nlattr *opt)
 {
 	struct pie_sched_data *q = qdisc_priv(sch);
 	struct nlattr *tb[TCA_PIE_MAX + 1];
-	unsigned int qlen;
+	unsigned int drop_len = 0, qlen;
 	int err;
 
 	if (!opt)
@@ -138,10 +146,15 @@ static int pie_change(struct Qdisc *sch, struct nlattr *opt)
 	while (sch->q.qlen > sch->limit) {
 		struct sk_buff *skb = __skb_dequeue(&sch->q);
 
+		if (!skb)
+			break;
+
+		drop_len += qdisc_pkt_len(skb);
+
 		qdisc_qstats_backlog_dec(sch, skb);
-		qdisc_drop(skb, sch);
+		kfree_skb(skb);
 	}
-	qdisc_tree_decrease_qlen(sch, qlen - sch->q.qlen);
+	qdisc_tree_reduce_backlog(sch, qlen - sch->q.qlen, drop_len);
 
 	sch_tree_unlock(sch);
 	return 0;

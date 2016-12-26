@@ -44,4 +44,14 @@ static inline void kvfree(const void *addr)
 #define pie_stats_copy_queue(a,b,c,d) gnet_stats_copy_queue(a,b,c,d)
 #endif
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4,3,0)
+#define pie_tc_classify(a,b,c,d) tc_classify(a,b,c)
+#else
+#define pie_tc_classify(a,b,c,d) tc_classify(a,b,c,d)
+#endif
+
+#if (KERNEL_VERSION(4,4,11) > LINUX_VERSION_CODE) || ((KERNEL_VERSION(4,5,0) <= LINUX_VERSION_CODE) && (KERNEL_VERSION(4,5,5) > LINUX_VERSION_CODE))
+#define qdisc_tree_reduce_backlog(_a,_b,_c) qdisc_tree_decrease_qlen(_a,_b)
+#endif
+
 #endif

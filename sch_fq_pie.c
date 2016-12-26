@@ -82,6 +82,7 @@ struct fq_pie_sched_data {
 static unsigned int fq_pie_hash(const struct fq_pie_sched_data *q,
 				  const struct sk_buff *skb)
 {
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4,2,0)
 	struct flow_keys keys;
 	unsigned int hash;
 
@@ -90,6 +91,10 @@ static unsigned int fq_pie_hash(const struct fq_pie_sched_data *q,
 						(__force u32)keys.src ^ keys.ip_proto,
 						(__force u32)keys.ports, q->perturbation);
 	return ((u64)hash * q->flows_cnt) >> 32;
+#else
+	u32 hash = skb_get_hash_perturb(skb, q->perturbation);
+	return reciprocal_scale(hash, q->flows_cnt);
+#endif
 }
 
 static unsigned int fq_pie_classify(struct sk_buff *skb, struct Qdisc *sch,
@@ -110,7 +115,7 @@ static unsigned int fq_pie_classify(struct sk_buff *skb, struct Qdisc *sch,
 		return fq_pie_hash(q, skb) + 1;
 
 	*qerr = NET_XMIT_SUCCESS | __NET_XMIT_BYPASS;
-	result = tc_classify(skb, filter, &res);
+	result = pie_tc_classify(skb, filter, &res, false);
 	if (result >= 0) {
 #ifdef CONFIG_NET_CLS_ACT
 		switch (result) {
@@ -139,7 +144,11 @@ static inline void flow_queue_add(struct fq_pie_flow *flow,
 	skb->next = NULL;
 }
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 8, 0)
 static int fq_pie_enqueue(struct sk_buff *skb, struct Qdisc *sch)
+#else
+static int fq_pie_enqueue(struct sk_buff *skb, struct Qdisc *sch, struct sk_buff **to_free)
+#endif
 {
 	struct fq_pie_sched_data *q = qdisc_priv(sch);
 	unsigned int idx;
@@ -163,7 +172,11 @@ static int fq_pie_enqueue(struct sk_buff *skb, struct Qdisc *sch)
 	if (sch->q.qlen >= sch->limit){
 		q->stats.overlimit++;
 		q->stats.dropped++;
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 8, 0)
 		return qdisc_drop(skb, sch);
+#else
+		return qdisc_drop(skb, sch, to_free);
+#endif
 	}
 	sch->q.qlen++;
 
@@ -194,7 +207,11 @@ static int fq_pie_enqueue(struct sk_buff *skb, struct Qdisc *sch)
 			q->stats.maxq = qdisc_qlen(sch);
 	}else{
 		q->stats.dropped++;
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 8, 0)
 		return qdisc_drop(skb, sch);
+#else
+		return qdisc_drop(skb, sch, to_free);
+#endif
 	}
 
 	flow_queue_add(flow, skb);
@@ -352,8 +369,9 @@ static int fq_pie_change(struct Qdisc *sch, struct nlattr *opt)
 	while (sch->q.qlen > sch->limit) {
 		struct sk_buff *skb = fq_pie_dequeue(sch);
 
+		qdisc_tree_reduce_backlog(sch, 1, qdisc_pkt_len(skb));
+
 		kfree_skb(skb);
-		qdisc_tree_decrease_qlen(sch, 1);
 	}
 
 	sch_tree_unlock(sch);
